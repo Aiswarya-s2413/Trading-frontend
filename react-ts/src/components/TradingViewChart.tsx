@@ -1,6 +1,7 @@
-import React, { useRef, useEffect, useState } from "react";
+import React, { useRef, useEffect } from "react";
 import {
   createChart,
+  ColorType,
   CandlestickSeries,
   LineSeries,
   createSeriesMarkers,
@@ -9,7 +10,6 @@ import type {
   IChartApi,
   ISeriesApi,
   Time,
-  LineData,
   SeriesMarker,
 } from "lightweight-charts";
 import type { PriceData, Marker } from "../api";
@@ -43,7 +43,7 @@ const TradingViewChart: React.FC<TradingViewChartProps> = ({
         width: chartContainerRef.current.clientWidth,
         height: 500, // Fixed height for now
         layout: {
-          background: { type: "solid", color: "#1a1a1a" },
+          background: { type: ColorType.Solid, color: "#1a1a1a" },
           textColor: "#d1d4dc",
         },
         grid: {
