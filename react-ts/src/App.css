@@ -1,0 +1,92 @@
+/* Basic Reset and Body Styles */
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: #282c34; /* Dark background */
+  color: #abb2bf; /* Light text color */
+}
+
+.App {
+  text-align: center;
+  padding: 20px;
+}
+
+h1 {
+  color: #61dafb; /* React blue */
+  margin-bottom: 30px;
+}
+
+/* Form Styling */
+.input-form {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 15px;
+  margin-bottom: 30px;
+  padding: 20px;
+  background-color: #3a3f4a;
+  border-radius: 8px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+.input-form label {
+  display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        font-size: 0.9em;
+        color: #d1d4dc;
+}
+
+.input-form input[type="text"],
+.input-form input[type="number"],
+.input-form select {
+  padding: 8px 10px;
+  border: 1px solid #555;
+  border-radius: 4px;
+  background-color: #4a4f5a;
+  color: #d1d4dc;
+  font-size: 1em;
+  margin-top: 5px;
+  width: 150px; /* Uniform width */
+}
+
+.input-form input[type="text"]:focus,
+.input-form input[type="number"]:focus,
+.input-form select:focus {
+  border-color: #61dafb;
+  outline: none;
+}
+
+.input-form button {
+  padding: 10px 20px;
+  background-color: #61dafb;
+  color: #282c34;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 1em;
+  font-weight: bold;
+  transition: background-color 0.3s ease;
+  align-self: flex-end; /* Align button at the bottom of the form row */
+}
+
+.input-form button:hover:not(:disabled) {
+  background-color: #53c5e8;
+}
+
+.input-form button:disabled {
+  background-color: #888;
+  cursor: not-allowed;
+}
+
+/* Chart Container Wrapper */
+.chart-container-wrapper {
+  background-color: #1a1a1a; /* Match chart background */
+  border-radius: 8px;
+  padding: 10px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
