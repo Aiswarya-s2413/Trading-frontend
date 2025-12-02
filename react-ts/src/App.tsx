@@ -13,6 +13,7 @@ function App() {
   const [pattern, setPattern] = useState<string>("Narrow Range Break");
   const [timeFrame, setTimeFrame] = useState<string>("Daily"); // For future use, not directly in current API
   const [nrbLookback, setNrbLookback] = useState<number>(7); // Matches nrb_lookback in backend
+  const [weeks, setWeeks] = useState<number>(20); // Weeks parameter for NRB (1-100)
   const [successRate, setSuccessRate] = useState<number>(0); // Matches success_rate in backend
   const [parameterValue, setParameterValue] = useState<string>(""); // For future 'Parameter' input
   const [successTimeframe, setSuccessTimeframe] = useState<string>(""); // For future 'Success Timeframe' input
@@ -29,15 +30,21 @@ function App() {
     setLoading(true);
     setError(null);
     try {
-      // Adjust nrbLookback for Bowl pattern if needed, as per backend's incompatibility check
+      // For NRB: use default nrbLookback (7) since user only selects weeks
+      // For Bowl: ensure minimum 60 days
       const actualNrbLookback =
-        pattern === "Bowl" ? Math.max(nrbLookback, 60) : nrbLookback;
+        pattern === "Bowl" 
+          ? Math.max(nrbLookback, 60) 
+          : pattern === "Narrow Range Break" 
+          ? 7 // Default value for NRB (not shown to user)
+          : nrbLookback;
 
       const data = await fetchPatternScanData(
         scrip,
         pattern,
-        actualNrbLookback, // Pass the potentially adjusted lookback
-        successRate
+        actualNrbLookback,
+        successRate,
+        pattern === "Narrow Range Break" ? weeks : undefined // Only pass weeks for NRB pattern
         // Add other parameters here if your API supports them dynamically
         // parameterValue,
         // successTimeframe,
@@ -121,30 +128,33 @@ function App() {
           </select>
         </label>
 
-        {/* TimeFrame Dropdown (currently static, can be used for backend logic later) */}
-        <label>
-          TimeFrame:
-          <select
-            value={timeFrame}
-            onChange={(e) => setTimeFrame(e.target.value)}
-          >
-            {TIME_FRAMES.map((tf) => (
-              <option key={tf} value={tf}>
-                {tf}
-              </option>
-            ))}
-          </select>
-        </label>
+        {/* TimeFrame Dropdown - Only show for Bowl pattern (NRB uses weeks input instead) */}
+        {pattern === "Bowl" && (
+          <label>
+            TimeFrame:
+            <select
+              value={timeFrame}
+              onChange={(e) => setTimeFrame(e.target.value)}
+            >
+              {TIME_FRAMES.map((tf) => (
+                <option key={tf} value={tf}>
+                  {tf}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
 
-        {/* NRB Lookback Input (renamed from 'Pattern TimeFrame' to be specific) */}
+        {/* Weeks Input - Only for NRB pattern */}
         {pattern === "Narrow Range Break" && (
           <label>
-            NRB Lookback (Days):
+            Weeks (Timeframe):
             <input
               type="number"
-              value={nrbLookback}
-              onChange={(e) => setNrbLookback(parseInt(e.target.value))}
+              value={weeks}
+              onChange={(e) => setWeeks(parseInt(e.target.value))}
               min="1"
+              max="100"
               required
             />
           </label>

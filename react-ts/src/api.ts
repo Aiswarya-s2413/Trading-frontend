@@ -40,8 +40,8 @@ export const fetchPatternScanData = async (
   scrip: string,
   pattern: string,
   nrbLookback: number | null, // Can be null if not applicable to the pattern
-  successRate: number
-  // Add other parameters as needed: parameterValue, successTimeframe
+  successRate: number,
+  weeks?: number
 ): Promise<PatternScanResponse> => {
   try {
     const params: any = {
@@ -52,6 +52,10 @@ export const fetchPatternScanData = async (
 
     if (nrbLookback !== null) {
       params.nrb_lookback = nrbLookback;
+    }
+
+    if (pattern === "Narrow Range Break" && weeks != null) {
+      params.weeks = weeks;  // 👈 this will become ?weeks=20 in the URL
     }
     // Add other dynamic parameters here, e.g.:
     // if (parameterValue !== null) { params.parameter_value = parameterValue; }
