@@ -20,6 +20,13 @@ export interface Marker {
   text?: string;
   pattern_id?: number; // Used for grouping bowl patterns
   score?: number; // Success score from backend
+
+  // 🆕 NRB RANGE-LINE FIELDS (OPTIONAL)
+  range_low?: number | null;
+  range_high?: number | null;
+  range_start_time?: number | null;
+  range_end_time?: number | null;
+  nrb_id?: number | null;
 }
 
 export interface PatternScanResponse {
@@ -95,11 +102,19 @@ export const fetchPatternScanData = async (
         time: marker.time,
         pattern_id: marker.pattern_id,
         score: marker.score,
+
         // Optional fields with defaults
         position: marker.position || "belowBar",
         color: marker.color || "#2196F3",
         shape: marker.shape || "circle",
         text: marker.text,
+
+        // 🆕 PASS THROUGH NRB RANGE INFO (YOUR FRONTEND NEEDS THIS)
+        range_low: marker.range_low ?? null,
+        range_high: marker.range_high ?? null,
+        range_start_time: marker.range_start_time ?? null,
+        range_end_time: marker.range_end_time ?? null,
+        nrb_id: marker.nrb_id ?? null,
       })),
     };
 
