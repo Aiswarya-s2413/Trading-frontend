@@ -413,10 +413,11 @@ const TradingViewChart: React.FC<TradingViewChartProps> = ({
       
           return {
             time: marker.time as Time,
-            position: (marker.position || "belowBar") as
-              | "aboveBar"
-              | "belowBar"
-              | "inBar",
+            position: (marker.position || "aboveBar") as
+            | "aboveBar"
+            | "belowBar"
+            | "inBar",
+
             color,
             shape,
             text: "",
