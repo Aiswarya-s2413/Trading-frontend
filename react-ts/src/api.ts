@@ -115,6 +115,8 @@ export const fetchPatternScanData = async (
         range_start_time: marker.range_start_time ?? null,
         range_end_time: marker.range_end_time ?? null,
         nrb_id: marker.nrb_id ?? null,
+        direction: marker.direction,
+
       })),
     };
 

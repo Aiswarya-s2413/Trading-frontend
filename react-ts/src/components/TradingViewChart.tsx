@@ -128,6 +128,9 @@ const TradingViewChart: React.FC<TradingViewChartProps> = ({
           range_start_time: mm.range_start_time,
           range_end_time: mm.range_end_time,
           nrb_id: mm.nrb_id,
+          direction: mm.direction,
+          nr_high: mm.nr_high,
+          nr_low: mm.nr_low,
         });
         const markersWithPatternId = markers.filter(
           (m) => (m as any).pattern_id != null
@@ -386,7 +389,7 @@ const TradingViewChart: React.FC<TradingViewChartProps> = ({
         ]);
       });
 
-      // 7. Handle other patterns (NRB dots, etc.)
+      // 7. Handle other patterns (NRB dots, etc.) – using exact breakout time from backend
       const otherMarkers: SeriesMarker<Time>[] = markers
         .filter((m: any) => {
           const isBowlMarker =
@@ -394,20 +397,32 @@ const TradingViewChart: React.FC<TradingViewChartProps> = ({
             m.text?.toUpperCase().includes("BOWL");
           return !isBowlMarker;
         })
-        .map((marker: any) => ({
-          time: marker.time as Time,
-          position: (marker.position || "belowBar") as
-            | "aboveBar"
-            | "belowBar"
-            | "inBar",
-          color: marker.color || "#2196F3",
-          shape: (marker.shape || "circle") as
-            | "circle"
-            | "square"
-            | "arrowUp"
-            | "arrowDown",
-          text: "",
-        }));
+        .map((marker: any) => {
+          // Default values
+          let color = marker.color || "#2196F3";
+          let shape = marker.shape || "circle";
+      
+          // 🔥 Apply neon colors for NRB breakouts
+          if (marker.direction === "Bullish Break") {
+            color = "#00E5FF";     // Neon Blue
+            shape = "arrowUp";
+          } else if (marker.direction === "Bearish Break") {
+            color = "#FFD600";     // Neon Yellow
+            shape = "arrowDown";
+          }
+      
+          return {
+            time: marker.time as Time,
+            position: (marker.position || "belowBar") as
+              | "aboveBar"
+              | "belowBar"
+              | "inBar",
+            color,
+            shape,
+            text: "",
+          };
+      });
+      
 
       if (seriesMarkers) {
         seriesMarkers.setMarkers(otherMarkers);
