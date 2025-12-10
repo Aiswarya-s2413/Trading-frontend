@@ -1,3 +1,4 @@
+// src/components/TradingViewChart.tsx
 import React, { useRef, useEffect } from "react";
 import {
   createChart,
@@ -12,38 +13,49 @@ import type {
   Time,
   SeriesMarker,
 } from "lightweight-charts";
-import type { PriceData, Marker } from "../api";
+import type { PriceData, Marker, SeriesPoint } from "../api";
 
 interface TradingViewChartProps {
   priceData: PriceData[];
   markers: Marker[];
   chartTitle: string;
+  parameterSeriesName?: string | null;
+  parameterSeriesData?: SeriesPoint[];
 }
 
 const TradingViewChart: React.FC<TradingViewChartProps> = ({
   priceData,
   markers,
   chartTitle,
+  parameterSeriesName,
+  parameterSeriesData,
 }) => {
-  const chartContainerRef = useRef<HTMLDivElement>(null);
+  const chartContainerRef = useRef<HTMLDivElement | null>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const candlestickSeriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
-  // Refs for the line series to draw various patterns
-  const patternSeriesRefs = useRef<Map<string, ISeriesApi<"Line">>>(new Map());
-  // Refs for NRB narrow-range horizontal lines (high & low for each regime)
+  const parameterLineSeriesRef = useRef<ISeriesApi<"Line"> | null>(null);
+
+  // Bowl curves: one line series per bowl pattern
+  const bowlSeriesRefs = useRef<Map<string, ISeriesApi<"Line">>>(new Map());
+  // NRB range lines: high/low per regime
   const nrbRangeSeriesRefs = useRef<Map<string, ISeriesApi<"Line">>>(new Map());
-  const seriesMarkersRef = useRef<ReturnType<
+
+  // Markers plugin instances - one for each series type
+  const candlestickMarkersRef = useRef<ReturnType<
+    typeof createSeriesMarkers<Time>
+  > | null>(null);
+  const parameterLineMarkersRef = useRef<ReturnType<
     typeof createSeriesMarkers<Time>
   > | null>(null);
 
   useEffect(() => {
     if (!chartContainerRef.current) return;
 
-    // Initialize chart if it doesn't exist
+    // === 1. Create chart + base candlestick series once ===
     if (!chartRef.current) {
-      chartRef.current = createChart(chartContainerRef.current, {
+      const chart = createChart(chartContainerRef.current, {
         width: chartContainerRef.current.clientWidth,
-        height: 500, // Fixed height for now
+        height: 500,
         layout: {
           background: { type: ColorType.Solid, color: "#1a1a1a" },
           textColor: "#d1d4dc",
@@ -60,22 +72,37 @@ const TradingViewChart: React.FC<TradingViewChartProps> = ({
         },
       });
 
-      // Use addSeries with the CandlestickSeries object
-      candlestickSeriesRef.current = chartRef.current.addSeries(
-        CandlestickSeries,
-        {
-          upColor: "#26a69a",
-          downColor: "#ef5350",
-          borderVisible: false,
-          wickUpColor: "#26a69a",
-          wickDownColor: "#ef5350",
-        }
-      );
+      chartRef.current = chart;
 
-      // Attach markers plugin to the candlestick series
-      if (candlestickSeriesRef.current) {
-        seriesMarkersRef.current = createSeriesMarkers(
+      // functional API: add candlestick series (will be hidden if parameter series is used)
+      candlestickSeriesRef.current = chart.addSeries(CandlestickSeries, {
+        upColor: "#26a69a",
+        downColor: "#ef5350",
+        borderVisible: false,
+        wickUpColor: "#26a69a",
+        wickDownColor: "#ef5350",
+      });
+
+      // Create parameter line series (will be used when parameter is not "close")
+      // Color will be updated based on parameter type
+      parameterLineSeriesRef.current = chart.addSeries(LineSeries, {
+        color: "#2962FF", // Default blue, will be updated
+        lineWidth: 2,
+        lineStyle: 0,
+        crosshairMarkerVisible: true,
+        priceLineVisible: false,
+      });
+
+      // Create markers plugins for both series
+      if (candlestickSeriesRef.current && !candlestickMarkersRef.current) {
+        candlestickMarkersRef.current = createSeriesMarkers(
           candlestickSeriesRef.current,
+          []
+        );
+      }
+      if (parameterLineSeriesRef.current && !parameterLineMarkersRef.current) {
+        parameterLineMarkersRef.current = createSeriesMarkers(
+          parameterLineSeriesRef.current,
           []
         );
       }
@@ -83,24 +110,84 @@ const TradingViewChart: React.FC<TradingViewChartProps> = ({
 
     const chart = chartRef.current;
     const candlestickSeries = candlestickSeriesRef.current;
-    const seriesMarkers = seriesMarkersRef.current;
+    const parameterLineSeries = parameterLineSeriesRef.current;
 
-    if (!chart || !candlestickSeries) return;
+    if (!chart || !candlestickSeries || !parameterLineSeries) return;
 
-    // Update chart data
-    if (priceData.length > 0) {
-      const formattedPriceData = priceData.map((item) => ({
-        time: item.time as Time, // Unix timestamp (seconds)
-        open: item.open,
-        high: item.high,
-        low: item.low,
-        close: item.close,
-      }));
-      candlestickSeries.setData(formattedPriceData);
+    // Determine if we should show line graph or candles
+    const showParameterLine =
+      parameterSeriesName &&
+      parameterSeriesData &&
+      parameterSeriesData.length > 0;
 
-      // ========= Handle Bowl Patterns Using pattern_id (one line per bowl) ==========
+    // === 2. Update price data ===
+    if (priceData.length > 0 || (showParameterLine && parameterSeriesData)) {
+      // Show/hide series based on parameter selection
+      if (showParameterLine) {
+        // Hide candlesticks, show parameter line
+        candlestickSeries.applyOptions({ visible: false });
+
+        // Set line color based on parameter type
+        const lineColors: Record<string, string> = {
+          ema21: "#00E5FF",
+          ema50: "#2962FF",
+          ema200: "#7C4DFF",
+          rsc30: "#00E676",
+          rsc500: "#FFD600",
+        };
+        const lineColor = lineColors[parameterSeriesName || ""] || "#2962FF";
+
+        parameterLineSeries.applyOptions({
+          visible: true,
+          color: lineColor,
+        });
+
+        // Update parameter line data
+        if (parameterSeriesData && parameterSeriesData.length > 0) {
+          const formattedLineData = parameterSeriesData.map((item) => ({
+            time: item.time as Time,
+            value: item.value,
+          }));
+          parameterLineSeries.setData(formattedLineData);
+        }
+      } else {
+        // Show candlesticks, hide parameter line
+        candlestickSeries.applyOptions({ visible: true });
+        parameterLineSeries.applyOptions({ visible: false });
+
+        // Update candlestick data
+        const formattedPriceData = priceData.map((item) => ({
+          time: item.time as Time,
+          open: item.open,
+          high: item.high,
+          low: item.low,
+          close: item.close,
+        }));
+        candlestickSeries.setData(formattedPriceData);
+      }
+
+      // Use the appropriate series for bowl calculations (use price data for candles, line data for parameter)
+      const dataForCalculations =
+        showParameterLine && parameterSeriesData
+          ? parameterSeriesData.map((item) => ({
+              time: item.time as Time,
+              open: item.value,
+              high: item.value,
+              low: item.value,
+              close: item.value,
+            }))
+          : priceData.map((item) => ({
+              time: item.time as Time,
+              open: item.open,
+              high: item.high,
+              low: item.low,
+              close: item.close,
+            }));
+
+      // === 3. Pattern logic: Bowl vs NRB ===
       const isBowlPattern = chartTitle.toLowerCase().includes("bowl");
 
+      // --- Bowl markers detection ---
       const bowlMarkers = markers.filter((m) => {
         const mm: any = m;
         if (isBowlPattern && mm.pattern_id != null) return true;
@@ -108,55 +195,7 @@ const TradingViewChart: React.FC<TradingViewChartProps> = ({
         return hasBowlText === true;
       });
 
-      console.log(
-        `[Pattern Detection] Chart title: "${chartTitle}", isBowlPattern: ${isBowlPattern}`
-      );
-      console.log(
-        `[Pattern Detection] Total markers received: ${markers.length}`,
-        markers
-      );
-
-      if (markers.length > 0) {
-        const mm: any = markers[0];
-        console.log(`[Pattern Detection] Sample marker:`, {
-          time: mm.time,
-          pattern_id: mm.pattern_id,
-          text: mm.text,
-          position: mm.position,
-          range_low: mm.range_low,
-          range_high: mm.range_high,
-          range_start_time: mm.range_start_time,
-          range_end_time: mm.range_end_time,
-          nrb_id: mm.nrb_id,
-          direction: mm.direction,
-          nr_high: mm.nr_high,
-          nr_low: mm.nr_low,
-        });
-        const markersWithPatternId = markers.filter(
-          (m) => (m as any).pattern_id != null
-        ).length;
-        console.log(
-          `[Pattern Detection] Markers with pattern_id: ${markersWithPatternId}`
-        );
-      }
-
-      if (bowlMarkers.length > 0) {
-        console.log(
-          `[Pattern Detection] ✓ Found ${bowlMarkers.length} bowl markers out of ${markers.length} total markers`
-        );
-      } else if (isBowlPattern) {
-        if (markers.length === 0) {
-          console.error(
-            `[Pattern Detection] ❌ Backend returned 0 markers for bowl`
-          );
-        } else {
-          console.warn(
-            `[Pattern Detection] ⚠ No bowl markers detected! Expected markers with pattern_id when chart title contains "Bowl"`
-          );
-        }
-      }
-
-      // 3. Group bowl markers by pattern_id
+      // Group bowl markers by pattern_id
       const bowls = new Map<number, Marker[]>();
       bowlMarkers.forEach((marker) => {
         const mm: any = marker;
@@ -165,16 +204,11 @@ const TradingViewChart: React.FC<TradingViewChartProps> = ({
         bowls.get(id)!.push(marker);
       });
 
-      // Fallback: group by time if no pattern_id
+      // Fallback grouping if pattern_id missing
       if (bowls.size === 1 && bowls.has(-1) && bowlMarkers.length > 0) {
-        console.warn(
-          "[Bowl Pattern] All markers have same/missing pattern_id. Grouping by time clusters (30-day window)."
-        );
         bowls.clear();
-
         const sortedMarkers = [...bowlMarkers].sort(
-          (a, b) =>
-            Number((a as any).time) - Number((b as any).time)
+          (a, b) => Number((a as any).time) - Number((b as any).time)
         );
 
         const TIME_CLUSTER_THRESHOLD = 30 * 24 * 60 * 60; // 30 days in seconds
@@ -195,25 +229,15 @@ const TradingViewChart: React.FC<TradingViewChartProps> = ({
         });
       }
 
-      if (bowls.size > 0) {
-        console.log(
-          `[Bowl Pattern] ✓ Grouped into ${bowls.size} unique bowl pattern(s)`
-        );
-        bowls.forEach((markers, id) => {
-          console.log(
-            `  - Pattern ID ${id}: ${markers.length} markers (left rim, bottom, right rim)`
-          );
-        });
-      }
-
-      // 4. Clear old bowl series
-      patternSeriesRefs.current.forEach((series, key) => {
-        if (!bowls.has(Number(key))) {
+      // --- Clear old bowl series that no longer exist ---
+      bowlSeriesRefs.current.forEach((series, key) => {
+        const id = Number(key);
+        if (!bowls.has(id)) {
           series.setData([]);
         }
       });
 
-      // 5. Color palette for bowls
+      // --- Draw bowl curves (U-shaped parabolas) ---
       const bowlColors = [
         "#2962FF",
         "#FF6D00",
@@ -227,11 +251,11 @@ const TradingViewChart: React.FC<TradingViewChartProps> = ({
         "#00BCD4",
       ];
 
-      // 6. Draw U-shaped curves for each bowl pattern
       bowls.forEach((patternMarkers, patternId) => {
+        if (patternMarkers.length === 0) return;
+
         patternMarkers.sort(
-          (a, b) =>
-            Number((a as any).time) - Number((b as any).time)
+          (a, b) => Number((a as any).time) - Number((b as any).time)
         );
 
         const numericPatternId = Number(patternId);
@@ -239,35 +263,35 @@ const TradingViewChart: React.FC<TradingViewChartProps> = ({
         const color = bowlColors[colorIndex];
 
         const seriesKey = String(numericPatternId);
-        let patternSeries = patternSeriesRefs.current.get(seriesKey);
+        let bowlSeries = bowlSeriesRefs.current.get(seriesKey);
 
-        if (!patternSeries) {
-          patternSeries = chart.addSeries(LineSeries, {
-            color: color,
+        if (!bowlSeries) {
+          bowlSeries = chart.addSeries(LineSeries, {
+            color,
             lineWidth: 3,
             lineStyle: 0,
             crosshairMarkerVisible: false,
             priceLineVisible: false,
           });
-          patternSeriesRefs.current.set(seriesKey, patternSeries);
+          bowlSeriesRefs.current.set(seriesKey, bowlSeries);
+        } else {
+          bowlSeries.applyOptions({
+            color,
+            lineWidth: 3,
+            lineStyle: 0,
+          });
         }
 
-        patternSeries.applyOptions({
-          color: color,
-          lineWidth: 3,
-          lineStyle: 0,
-        });
-
+        // Extend bowl span a bit on both sides
         const firstTime = Number((patternMarkers[0] as any).time);
         const lastTime = Number(
           (patternMarkers[patternMarkers.length - 1] as any).time
         );
-
         const EXTEND_DAYS = 30;
         const extendedFirstTime = firstTime - EXTEND_DAYS * 24 * 60 * 60;
         const extendedLastTime = lastTime + EXTEND_DAYS * 24 * 60 * 60;
 
-        const spanCandles = formattedPriceData
+        const spanCandles = dataForCalculations
           .filter(
             (c) =>
               Number(c.time) >= extendedFirstTime &&
@@ -276,7 +300,7 @@ const TradingViewChart: React.FC<TradingViewChartProps> = ({
           .sort((a, b) => Number(a.time) - Number(b.time));
 
         if (spanCandles.length === 0) {
-          patternSeries.setData([]);
+          bowlSeries.setData([]);
           return;
         }
 
@@ -311,11 +335,10 @@ const TradingViewChart: React.FC<TradingViewChartProps> = ({
           };
         });
 
-        patternSeries.setData(lineData);
-        patternSeries.applyOptions({ color: color });
+        bowlSeries.setData(lineData);
       });
 
-      // 6.5 Draw horizontal lines for NRB narrow ranges
+      // === 4. NRB range lines (horizontal high/low per regime) ===
       const nrbMarkersWithRange = markers.filter((m: any) => {
         const isBowlMarker =
           (isBowlPattern && m.pattern_id != null) ||
@@ -328,17 +351,14 @@ const TradingViewChart: React.FC<TradingViewChartProps> = ({
         return !isBowlMarker && hasRange;
       });
 
-      console.log(
-        `[NRB Ranges] Found ${nrbMarkersWithRange.length} markers with range info`
-      );
-
       // Clear old NRB range series
       nrbRangeSeriesRefs.current.forEach((series) => {
         series.setData([]);
       });
 
       nrbMarkersWithRange.forEach((marker: any) => {
-        const id = marker.nrb_id != null ? String(marker.nrb_id) : String(marker.time);
+        const id =
+          marker.nrb_id != null ? String(marker.nrb_id) : String(marker.time);
 
         // High line
         const highKey = `${id}-high`;
@@ -389,7 +409,7 @@ const TradingViewChart: React.FC<TradingViewChartProps> = ({
         ]);
       });
 
-      // 7. Handle other patterns (NRB dots, etc.) – using exact breakout time from backend
+      // === 5. NRB / other markers as dots/arrows ===
       const otherMarkers: SeriesMarker<Time>[] = markers
         .filter((m: any) => {
           const isBowlMarker =
@@ -398,68 +418,102 @@ const TradingViewChart: React.FC<TradingViewChartProps> = ({
           return !isBowlMarker;
         })
         .map((marker: any) => {
-          // Default values
           let color = marker.color || "#2196F3";
-          let shape = marker.shape || "circle";
-      
-          // 🔥 Apply neon colors for NRB breakouts
+          let shape: SeriesMarker<Time>["shape"] =
+            (marker.shape as any) || "circle";
+
+          // Neon arrows for NRB
+          const isNRBMarker =
+            marker.direction === "Bullish Break" ||
+            marker.direction === "Bearish Break";
+
           if (marker.direction === "Bullish Break") {
-            color = "#00E5FF";     // Neon Blue
+            color = "#00E5FF";
             shape = "arrowUp";
           } else if (marker.direction === "Bearish Break") {
-            color = "#FFD600";     // Neon Yellow
+            color = "#FFD600";
             shape = "arrowDown";
           }
-      
+
           return {
             time: marker.time as Time,
             position: (marker.position || "aboveBar") as
-            | "aboveBar"
-            | "belowBar"
-            | "inBar",
-
+              | "aboveBar"
+              | "belowBar"
+              | "inBar",
             color,
             shape,
-            text: "",
+            // Remove text for NRB markers - only show arrows
+            text: isNRBMarker ? "" : marker.text || "",
           };
-      });
-      
+        });
 
-      if (seriesMarkers) {
-        seriesMarkers.setMarkers(otherMarkers);
-      }
-
-      if (otherMarkers.length > 0) {
-        console.log(
-          `[Other Patterns] Displaying ${otherMarkers.length} markers for non-bowl patterns`
-        );
+      // Attach markers to the visible series
+      if (showParameterLine && parameterLineMarkersRef.current) {
+        parameterLineMarkersRef.current.setMarkers(otherMarkers);
+      } else if (!showParameterLine && candlestickMarkersRef.current) {
+        candlestickMarkersRef.current.setMarkers(otherMarkers);
       }
 
       chart.timeScale().fitContent();
     } else {
+      // No price data: clear everything
       candlestickSeries.setData([]);
-      if (seriesMarkers) seriesMarkers.setMarkers([]);
-      patternSeriesRefs.current.forEach((series) => series.setData([]));
+      if (parameterLineSeries) {
+        parameterLineSeries.setData([]);
+      }
+      candlestickMarkersRef.current?.setMarkers([]);
+      parameterLineMarkersRef.current?.setMarkers([]);
+      bowlSeriesRefs.current.forEach((series) => series.setData([]));
       nrbRangeSeriesRefs.current.forEach((series) => series.setData([]));
     }
 
+    // Resize handler
     const handleResize = () => {
-      if (chartContainerRef.current) {
-        chart.applyOptions({ width: chartContainerRef.current.clientWidth });
+      if (chartContainerRef.current && chartRef.current) {
+        chartRef.current.applyOptions({
+          width: chartContainerRef.current.clientWidth,
+        });
       }
     };
 
     window.addEventListener("resize", handleResize);
-
     return () => {
       window.removeEventListener("resize", handleResize);
     };
-  }, [priceData, markers, chartTitle]);
+  }, [
+    priceData,
+    markers,
+    chartTitle,
+    parameterSeriesName,
+    parameterSeriesData,
+  ]);
 
   return (
-    <div style={{ position: "relative" }}>
-      <h2 style={{ color: "#d1d4dc", textAlign: "center" }}>{chartTitle}</h2>
-      <div ref={chartContainerRef} style={{ width: "100%", height: "500px" }} />
+    <div className="w-full max-w-6xl mx-auto">
+      {/* Header row above the chart */}
+      <div className="mb-3 flex items-center justify-between">
+        <div>
+          <h2 className="text-lg font-semibold text-slate-50">{chartTitle}</h2>
+          <p className="text-xs text-slate-400">
+            {parameterSeriesName &&
+            parameterSeriesData &&
+            parameterSeriesData.length > 0
+              ? `${parameterSeriesName.toUpperCase()} line · Pattern scanner`
+              : "Daily candles · Pattern scanner"}
+          </p>
+        </div>
+
+        <span className="inline-flex items-center rounded-full border border-emerald-400/40 bg-emerald-400/10 px-3 py-0.5 text-[11px] font-medium uppercase tracking-wide text-emerald-300">
+          NRB / Bowl
+        </span>
+      </div>
+
+      {/* Chart container */}
+      <div
+        ref={chartContainerRef}
+        className="h-[500px] w-full rounded-2xl border border-slate-700 bg-slate-900/80 shadow-xl shadow-slate-950/60"
+      />
     </div>
   );
 };

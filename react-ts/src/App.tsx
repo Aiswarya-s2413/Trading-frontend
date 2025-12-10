@@ -1,125 +1,155 @@
-import React, { useState, useEffect } from "react";
+// App.tsx
+import React, { useState } from "react";
 import TradingViewChart from "./components/TradingViewChart";
-import { fetchPatternScanData, fetchRawPriceHistory } from "./api";
-import type { PriceData, Marker } from "./api";
-import "./App.css"; // Your main app styles
+import {
+  fetchPatternScanData,
+  fetchRawPriceHistory,
+  type PriceData,
+  type Marker,
+  type SeriesPoint,
+} from "./api";
+import "./App.css";
+import SymbolSearch from "./components/SymbolSearch";
 
-const PATTERNS = ["Narrow Range Break", "Bowl"]; // Keep these in sync with your backend
-const TIME_FRAMES = ["Daily", "Weekly"]; // Example, adapt as needed
+const PATTERNS = ["Narrow Range Break", "Bowl"] as const;
+
+// Parameters matching backend `series` values
+const PARAMETERS = [
+  { label: "Close (default)", value: "close" },      // no series param → price candles
+  { label: "EMA 21", value: "ema21" },
+  { label: "EMA 50", value: "ema50" },
+  { label: "EMA 200", value: "ema200" },
+  { label: "RSC 30", value: "rsc30" },
+  { label: "RSC 500", value: "rsc500" },
+] as const;
+
+type ParameterValue = (typeof PARAMETERS)[number]["value"];
 
 function App() {
   // --- Form State ---
   const [scrip, setScrip] = useState<string>("RELIANCE.NS");
   const [pattern, setPattern] = useState<string>("Narrow Range Break");
-  const [timeFrame, setTimeFrame] = useState<string>("Daily"); // For future use, not directly in current API
-  const [nrbLookback, setNrbLookback] = useState<number>(7); // Matches nrb_lookback in backend
-  const [weeks, setWeeks] = useState<number>(20); // Weeks parameter for NRB (1-100)
-  const [successRate, setSuccessRate] = useState<number>(0); // Matches success_rate in backend
-  const [parameterValue, setParameterValue] = useState<string>(""); // For future 'Parameter' input
-  const [successTimeframe, setSuccessTimeframe] = useState<string>(""); // For future 'Success Timeframe' input
+  const [weeks, setWeeks] = useState<number>(52); // default 52
+  const [parameter, setParameter] = useState<ParameterValue>("close");
+
+  // you can expose successRate later if needed; keep 0 for now
+  const [successRate] = useState<number>(0);
 
   // --- Data State ---
   const [priceData, setPriceData] = useState<PriceData[]>([]);
   const [markers, setMarkers] = useState<Marker[]>([]);
+  const [seriesName, setSeriesName] = useState<string | null>(null);
+  const [seriesData, setSeriesData] = useState<SeriesPoint[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [isFilteredView, setIsFilteredView] = useState<boolean>(false);
 
-  // --- Fetch filtered (pattern scan) data ---
   const fetchFilteredData = async () => {
+    if (!scrip) {
+      setError("Please enter a symbol.");
+      return;
+    }
+
     setLoading(true);
     setError(null);
+
     try {
-      // For NRB: use default nrbLookback (7) since user only selects weeks
-      // For Bowl: ensure minimum 60 days
-      const actualNrbLookback =
-        pattern === "Bowl" 
-          ? Math.max(nrbLookback, 60) 
-          : pattern === "Narrow Range Break" 
-          ? 7 // Default value for NRB (not shown to user)
-          : nrbLookback;
+      // map parameter -> backend series
+      const seriesParam =
+        parameter === "close" ? null : (parameter as string);
 
       const data = await fetchPatternScanData(
         scrip,
         pattern,
-        actualNrbLookback,
-        successRate,
-        pattern === "Narrow Range Break" ? weeks : undefined // Only pass weeks for NRB pattern
-        // Add other parameters here if your API supports them dynamically
-        // parameterValue,
-        // successTimeframe,
+        null,              // nrbLookback: backend ignores now
+        successRate,       // effectively no filter (0)
+        pattern === "Narrow Range Break" ? weeks : undefined,
+        seriesParam        // 👈 tell backend which series to use
       );
 
-      // Debug: Log what we received
       console.log("[App] Received data:", {
         scrip: data.scrip,
         pattern: data.pattern,
         priceDataCount: data.price_data?.length || 0,
         markersCount: data.markers?.length || 0,
+        series: data.series,
+        seriesPoints: data.series_data?.length || 0,
       });
 
       setPriceData(data.price_data || []);
       setMarkers(data.markers || []);
+      setSeriesName(data.series ?? null);
+      setSeriesData(data.series_data ?? []);
       setIsFilteredView(true);
     } catch (err: any) {
       setError(err.message || "Failed to fetch data");
-      setPriceData([]); // Clear data on error
+      setPriceData([]);
       setMarkers([]);
+      setSeriesData([]);
+      setSeriesName(null);
+      setIsFilteredView(false);
     } finally {
       setLoading(false);
     }
   };
 
-  // --- Fetch initial raw (unfiltered) 10-year data on first mount ---
-  const fetchInitialRawData = async () => {
+  // Optional: button to load raw history (no filters)
+  const fetchRaw = async () => {
+    if (!scrip) {
+      setError("Please enter a symbol.");
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
       const data = await fetchRawPriceHistory(scrip, 10);
-      setPriceData(data.price_data);
-      setMarkers([]); // No pattern markers in raw view
+      setPriceData(data.price_data || []);
+      setMarkers([]);
+      setSeriesData([]);
+      setSeriesName(null);
       setIsFilteredView(false);
     } catch (err: any) {
       setError(err.message || "Failed to fetch raw price history");
       setPriceData([]);
       setMarkers([]);
+      setSeriesData([]);
     } finally {
       setLoading(false);
     }
   };
 
-  // --- Initial Load ---
-  useEffect(() => {
-    fetchInitialRawData();
-  }, []); // Only run once on mount for initial data
-
-  // --- Handle Form Submission ---
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     fetchFilteredData();
   };
 
-  // --- Render ---
   return (
     <div className="App">
       <h1>Trading Pattern Analyzer</h1>
 
       <form onSubmit={handleSubmit} className="input-form">
-        {/* Scrip Input */}
+        {/* Symbol text input (you'll replace this with dropdown+search) */}
         <label>
-          Scrip:
-          <input
-            type="text"
-            value={scrip}
-            onChange={(e) => setScrip(e.target.value)}
-            required
-          />
-        </label>
+  Symbol:
+  <SymbolSearch
+    value={scrip}
+    onChange={(val) => setScrip(val)}
+    onSelect={(val) => {
+      setScrip(val);
+      // Optionally, auto-load raw history on select:
+      // fetchRaw();
+    }}
+  />
+</label>
+
 
         {/* Pattern Dropdown */}
         <label>
           Pattern:
-          <select value={pattern} onChange={(e) => setPattern(e.target.value)}>
+          <select
+            value={pattern}
+            onChange={(e) => setPattern(e.target.value)}
+          >
             {PATTERNS.map((p) => (
               <option key={p} value={p}>
                 {p}
@@ -128,89 +158,46 @@ function App() {
           </select>
         </label>
 
-        {/* TimeFrame Dropdown - Only show for Bowl pattern (NRB uses weeks input instead) */}
-        {pattern === "Bowl" && (
-          <label>
-            TimeFrame:
-            <select
-              value={timeFrame}
-              onChange={(e) => setTimeFrame(e.target.value)}
-            >
-              {TIME_FRAMES.map((tf) => (
-                <option key={tf} value={tf}>
-                  {tf}
-                </option>
-              ))}
-            </select>
-          </label>
-        )}
+        {/* Parameter Dropdown */}
+        <label>
+          Parameter:
+          <select
+            value={parameter}
+            onChange={(e) => setParameter(e.target.value as ParameterValue)}
+          >
+            {PARAMETERS.map((p) => (
+              <option key={p.value} value={p.value}>
+                {p.label}
+              </option>
+            ))}
+          </select>
+        </label>
 
-        {/* Weeks Input - Only for NRB pattern */}
+        {/* Weeks only for NRB */}
         {pattern === "Narrow Range Break" && (
           <label>
-            Weeks (Timeframe):
+            Weeks (1–100):
             <input
               type="number"
               value={weeks}
-              onChange={(e) => setWeeks(parseInt(e.target.value))}
-              min="1"
-              max="100"
-              required
+              onChange={(e) => setWeeks(parseInt(e.target.value || "1", 10))}
+              min={1}
+              max={100}
             />
           </label>
         )}
-        {/* For Bowl, ensure nrbLookback is at least 60 for the API guardrail */}
-        {pattern === "Bowl" && (
-          <label>
-            Min. Bowl Duration (Days):
-            <input
-              type="number"
-              value={Math.max(nrbLookback, 60)} // Display min 60, but internal state might be lower
-              onChange={(e) => setNrbLookback(parseInt(e.target.value))}
-              min="60"
-              required
-            />
-          </label>
-        )}
-
-        {/* Parameter Input (Placeholder for future, e.g., 'EMA 200' value) */}
-        <label>
-          Parameter:
-          <input
-            type="text"
-            value={parameterValue}
-            onChange={(e) => setParameterValue(e.target.value)}
-            placeholder="e.g., 200, 50"
-          />
-        </label>
-
-        {/* Success Rate Input */}
-        <label>
-          Success Rate (%):
-          <input
-            type="number"
-            value={successRate}
-            onChange={(e) => setSuccessRate(parseFloat(e.target.value))}
-            min="0"
-            max="100"
-            step="0.1"
-            required
-          />
-        </label>
-
-        {/* Success Timeframe (Placeholder for future, e.g., 'n weeks') */}
-        <label>
-          Success Timeframe:
-          <input
-            type="text"
-            value={successTimeframe}
-            onChange={(e) => setSuccessTimeframe(e.target.value)}
-            placeholder="e.g., 2 weeks"
-          />
-        </label>
 
         <button type="submit" disabled={loading}>
-          {loading ? "Loading..." : "Submit"}
+          {loading ? "Loading..." : "Apply Filter"}
+        </button>
+
+        <button
+          type="button"
+          onClick={fetchRaw}
+          disabled={loading}
+          style={{ marginLeft: "8px" }}
+        >
+          {loading ? "Loading..." : "Raw 10Y Price"}
         </button>
       </form>
 
@@ -222,9 +209,15 @@ function App() {
           markers={markers}
           chartTitle={
             isFilteredView
-              ? `${scrip} - ${pattern} Pattern`
+              ? `${scrip} - ${pattern}${
+                  parameter !== "close"
+                    ? ` [${parameter.toUpperCase()}]`
+                    : ""
+                }`
               : `${scrip} - 10Y Price History`
           }
+          parameterSeriesName={seriesName}
+          parameterSeriesData={seriesData}
         />
       </div>
     </div>
