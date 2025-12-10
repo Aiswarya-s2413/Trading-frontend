@@ -15,7 +15,7 @@ const PATTERNS = ["Narrow Range Break", "Bowl"] as const;
 
 // Parameters matching backend `series` values
 const PARAMETERS = [
-  { label: "Close (default)", value: "close" },      // no series param → price candles
+  { label: "Close (default)", value: "close" }, // no series param → price candles
   { label: "EMA 21", value: "ema21" },
   { label: "EMA 50", value: "ema50" },
   { label: "EMA 200", value: "ema200" },
@@ -27,7 +27,7 @@ type ParameterValue = (typeof PARAMETERS)[number]["value"];
 
 function App() {
   // --- Form State ---
-  const [scrip, setScrip] = useState<string>("RELIANCE.NS");
+  const [scrip, setScrip] = useState<string>("");
   const [pattern, setPattern] = useState<string>("Narrow Range Break");
   const [weeks, setWeeks] = useState<number>(52); // default 52
   const [parameter, setParameter] = useState<ParameterValue>("close");
@@ -55,16 +55,15 @@ function App() {
 
     try {
       // map parameter -> backend series
-      const seriesParam =
-        parameter === "close" ? null : (parameter as string);
+      const seriesParam = parameter === "close" ? null : (parameter as string);
 
       const data = await fetchPatternScanData(
         scrip,
         pattern,
-        null,              // nrbLookback: backend ignores now
-        successRate,       // effectively no filter (0)
+        null, // nrbLookback: backend ignores now
+        successRate, // effectively no filter (0)
         pattern === "Narrow Range Break" ? weeks : undefined,
-        seriesParam        // 👈 tell backend which series to use
+        seriesParam // 👈 tell backend which series to use
       );
 
       console.log("[App] Received data:", {
@@ -130,26 +129,22 @@ function App() {
       <form onSubmit={handleSubmit} className="input-form">
         {/* Symbol text input (you'll replace this with dropdown+search) */}
         <label>
-  Symbol:
-  <SymbolSearch
-    value={scrip}
-    onChange={(val) => setScrip(val)}
-    onSelect={(val) => {
-      setScrip(val);
-      // Optionally, auto-load raw history on select:
-      // fetchRaw();
-    }}
-  />
-</label>
-
+          Symbol:
+          <SymbolSearch
+            value={scrip}
+            onChange={(val) => setScrip(val)}
+            onSelect={(val) => {
+              setScrip(val);
+              // Optionally, auto-load raw history on select:
+              // fetchRaw();
+            }}
+          />
+        </label>
 
         {/* Pattern Dropdown */}
         <label>
           Pattern:
-          <select
-            value={pattern}
-            onChange={(e) => setPattern(e.target.value)}
-          >
+          <select value={pattern} onChange={(e) => setPattern(e.target.value)}>
             {PATTERNS.map((p) => (
               <option key={p} value={p}>
                 {p}
@@ -208,13 +203,13 @@ function App() {
           priceData={priceData}
           markers={markers}
           chartTitle={
-            isFilteredView
-              ? `${scrip} - ${pattern}${
-                  parameter !== "close"
-                    ? ` [${parameter.toUpperCase()}]`
-                    : ""
-                }`
-              : `${scrip} - 10Y Price History`
+            scrip
+              ? isFilteredView
+                ? `${scrip} - ${pattern}${
+                    parameter !== "close" ? ` [${parameter.toUpperCase()}]` : ""
+                  }`
+                : `${scrip} - 10Y Price History`
+              : "Select a symbol to view chart"
           }
           parameterSeriesName={seriesName}
           parameterSeriesData={seriesData}
