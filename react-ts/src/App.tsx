@@ -50,7 +50,29 @@ function App() {
   const [week52HighMessage, setWeek52HighMessage] = useState<string | null>(
     null
   );
-  const [week52HighLoading, setWeek52HighLoading] = useState<boolean>(false);
+
+  // Helper function to fetch 52-week high
+  const fetchWeekHighForSymbol = async (symbol: string) => {
+    try {
+      const data: Week52HighResponse = await fetchWeek52High(symbol);
+      console.log("[App] 52W high response:", data);
+      setWeek52High(data.week52_high);
+      setWeek52HighDate(data.cutoff_date ?? null);
+      if (data.message) {
+        setWeek52HighMessage(data.message);
+      } else if (data.week52_high == null) {
+        setWeek52HighMessage("No price data found for the past 52 weeks.");
+      } else {
+        setWeek52HighMessage(null);
+      }
+    } catch (err: any) {
+      // Don't show error for 52-week high, just log it
+      console.error("Failed to fetch 52-week high:", err.message);
+      setWeek52High(null);
+      setWeek52HighDate(null);
+      setWeek52HighMessage(null);
+    }
+  };
 
   const fetchFilteredData = async () => {
     if (!scrip) {
@@ -88,6 +110,9 @@ function App() {
       setSeriesName(data.series ?? null);
       setSeriesData(data.series_data ?? []);
       setIsFilteredView(true);
+
+      // Automatically fetch 52-week high for the selected symbol
+      await fetchWeekHighForSymbol(scrip);
     } catch (err: any) {
       setError(err.message || "Failed to fetch data");
       setPriceData([]);
@@ -115,6 +140,9 @@ function App() {
       setSeriesData([]);
       setSeriesName(null);
       setIsFilteredView(false);
+
+      // Automatically fetch 52-week high for the selected symbol
+      await fetchWeekHighForSymbol(scrip);
     } catch (err: any) {
       setError(err.message || "Failed to fetch raw price history");
       setPriceData([]);
@@ -130,39 +158,6 @@ function App() {
     fetchFilteredData();
   };
 
-  const fetchWeekHigh = async () => {
-    if (!scrip) {
-      setError("Please enter a symbol.");
-      return;
-    }
-    // Clear previous state before new fetch
-    setWeek52High(null);
-    setWeek52HighDate(null);
-    setWeek52HighMessage(null);
-    setWeek52HighLoading(true);
-    setError(null);
-    try {
-      const data: Week52HighResponse = await fetchWeek52High(scrip);
-      console.log("[App] 52W high response:", data);
-      setWeek52High(data.week52_high);
-      setWeek52HighDate(data.cutoff_date ?? null);
-      if (data.message) {
-        setWeek52HighMessage(data.message);
-      } else if (data.week52_high == null) {
-        setWeek52HighMessage("No price data found for the past 52 weeks.");
-      } else {
-        setWeek52HighMessage(null);
-      }
-    } catch (err: any) {
-      setError(err.message || "Failed to fetch 52-week high");
-      setWeek52High(null);
-      setWeek52HighDate(null);
-      setWeek52HighMessage(null);
-    } finally {
-      setWeek52HighLoading(false);
-    }
-  };
-
   return (
     <div className="App">
       <h1>Trading Pattern Analyzer</h1>
@@ -173,9 +168,21 @@ function App() {
           Symbol:
           <SymbolSearch
             value={scrip}
-            onChange={(val) => setScrip(val)}
+            onChange={(val) => {
+              setScrip(val);
+              // Clear 52-week high when symbol changes
+              if (val !== scrip) {
+                setWeek52High(null);
+                setWeek52HighDate(null);
+                setWeek52HighMessage(null);
+              }
+            }}
             onSelect={(val) => {
               setScrip(val);
+              // Clear 52-week high when symbol changes
+              setWeek52High(null);
+              setWeek52HighDate(null);
+              setWeek52HighMessage(null);
               // Optionally, auto-load raw history on select:
               // fetchRaw();
             }}
@@ -235,15 +242,6 @@ function App() {
         >
           {loading ? "Loading..." : "Raw 10Y Price"}
         </button>
-
-        <button
-          type="button"
-          onClick={fetchWeekHigh}
-          disabled={week52HighLoading || loading}
-          style={{ marginLeft: "8px" }}
-        >
-          {week52HighLoading ? "Loading..." : "52W High"}
-        </button>
       </form>
 
       {error && <p style={{ color: "red" }}>Error: {error}</p>}
@@ -251,12 +249,12 @@ function App() {
       {(week52High !== null || week52HighMessage) && (
         <div className="week52-card">
           <strong>52-Week High: </strong>
-          {week52High !== null ? (
+          {typeof week52High === "number" ? (
             <span>{week52High.toFixed(2)}</span>
           ) : (
             <span>{week52HighMessage || "Not available"}</span>
           )}
-          {week52HighDate && (
+          {week52HighDate && typeof week52High === "number" && (
             <span style={{ marginLeft: 8, color: "#94a3b8" }}>
               (Since {week52HighDate})
             </span>
