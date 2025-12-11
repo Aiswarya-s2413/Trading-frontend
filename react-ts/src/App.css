@@ -1,8 +1,8 @@
 /* Basic Reset and Body Styles */
 body {
   margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen",
+    "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue",
     sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -35,10 +35,10 @@ h1 {
 
 .input-form label {
   display: flex;
-        flex-direction: column;
-        align-items: flex-start;
-        font-size: 0.9em;
-        color: #d1d4dc;
+  flex-direction: column;
+  align-items: flex-start;
+  font-size: 0.9em;
+  color: #d1d4dc;
 }
 
 .input-form input[type="text"],
@@ -89,4 +89,19 @@ h1 {
   border-radius: 8px;
   padding: 10px;
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+.week52-card {
+  margin: 12px auto 0;
+  padding: 10px 14px;
+  max-width: 420px;
+  background: #2b2f38;
+  border: 1px solid #3c4251;
+  border-radius: 8px;
+  color: #e2e8f0;
+  font-size: 0.95em;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 6px;
 }

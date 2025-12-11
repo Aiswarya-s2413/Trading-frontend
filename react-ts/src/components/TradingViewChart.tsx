@@ -21,6 +21,7 @@ interface TradingViewChartProps {
   chartTitle: string;
   parameterSeriesName?: string | null;
   parameterSeriesData?: SeriesPoint[];
+  week52High?: number | null;
 }
 
 const TradingViewChart: React.FC<TradingViewChartProps> = ({
@@ -29,11 +30,13 @@ const TradingViewChart: React.FC<TradingViewChartProps> = ({
   chartTitle,
   parameterSeriesName,
   parameterSeriesData,
+  week52High,
 }) => {
   const chartContainerRef = useRef<HTMLDivElement | null>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const candlestickSeriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
   const parameterLineSeriesRef = useRef<ISeriesApi<"Line"> | null>(null);
+  const week52HighSeriesRef = useRef<ISeriesApi<"Line"> | null>(null);
 
   // Bowl curves: one line series per bowl pattern
   const bowlSeriesRefs = useRef<Map<string, ISeriesApi<"Line">>>(new Map());
@@ -93,6 +96,15 @@ const TradingViewChart: React.FC<TradingViewChartProps> = ({
         priceLineVisible: false,
       });
 
+      // Line for 52-week high (horizontal)
+      week52HighSeriesRef.current = chart.addSeries(LineSeries, {
+        color: "#f59e0b", // amber
+        lineWidth: 2,
+        lineStyle: 1, // dashed
+        crosshairMarkerVisible: false,
+        priceLineVisible: false,
+      });
+
       // Create markers plugins for both series
       if (candlestickSeriesRef.current && !candlestickMarkersRef.current) {
         candlestickMarkersRef.current = createSeriesMarkers(
@@ -111,8 +123,15 @@ const TradingViewChart: React.FC<TradingViewChartProps> = ({
     const chart = chartRef.current;
     const candlestickSeries = candlestickSeriesRef.current;
     const parameterLineSeries = parameterLineSeriesRef.current;
+    const week52HighSeries = week52HighSeriesRef.current;
 
-    if (!chart || !candlestickSeries || !parameterLineSeries) return;
+    if (
+      !chart ||
+      !candlestickSeries ||
+      !parameterLineSeries ||
+      !week52HighSeries
+    )
+      return;
 
     // Determine if we should show line graph or candles
     const showParameterLine =
@@ -448,6 +467,38 @@ const TradingViewChart: React.FC<TradingViewChartProps> = ({
           };
         });
 
+      // --- 52-week high horizontal line (spans current data range) ---
+      if (week52High != null) {
+        const spanData =
+          dataForCalculations.length > 0
+            ? dataForCalculations
+            : showParameterLine && parameterSeriesData
+            ? parameterSeriesData.map((item) => ({
+                time: item.time as Time,
+                value: item.value,
+              }))
+            : priceData.map((item) => ({
+                time: item.time as Time,
+                value: item.close,
+              }));
+
+        if (spanData.length >= 2) {
+          const firstTime = spanData[0].time as Time;
+          const lastTime = spanData[spanData.length - 1].time as Time;
+          week52HighSeries.setData([
+            { time: firstTime, value: week52High },
+            { time: lastTime, value: week52High },
+          ]);
+          week52HighSeries.applyOptions({ visible: true });
+        } else {
+          week52HighSeries.setData([]);
+          week52HighSeries.applyOptions({ visible: false });
+        }
+      } else {
+        week52HighSeries.setData([]);
+        week52HighSeries.applyOptions({ visible: false });
+      }
+
       // Attach markers to the visible series
       if (showParameterLine && parameterLineMarkersRef.current) {
         parameterLineMarkersRef.current.setMarkers(otherMarkers);
@@ -462,6 +513,7 @@ const TradingViewChart: React.FC<TradingViewChartProps> = ({
       if (parameterLineSeries) {
         parameterLineSeries.setData([]);
       }
+      week52HighSeries.setData([]);
       candlestickMarkersRef.current?.setMarkers([]);
       parameterLineMarkersRef.current?.setMarkers([]);
       bowlSeriesRefs.current.forEach((series) => series.setData([]));
@@ -487,6 +539,7 @@ const TradingViewChart: React.FC<TradingViewChartProps> = ({
     chartTitle,
     parameterSeriesName,
     parameterSeriesData,
+    week52High,
   ]);
 
   return (

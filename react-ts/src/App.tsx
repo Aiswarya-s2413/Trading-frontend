@@ -7,6 +7,8 @@ import {
   type PriceData,
   type Marker,
   type SeriesPoint,
+  fetchWeek52High,
+  type Week52HighResponse,
 } from "./api";
 import "./App.css";
 import SymbolSearch from "./components/SymbolSearch";
@@ -43,6 +45,12 @@ function App() {
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [isFilteredView, setIsFilteredView] = useState<boolean>(false);
+  const [week52High, setWeek52High] = useState<number | null>(null);
+  const [week52HighDate, setWeek52HighDate] = useState<string | null>(null);
+  const [week52HighMessage, setWeek52HighMessage] = useState<string | null>(
+    null
+  );
+  const [week52HighLoading, setWeek52HighLoading] = useState<boolean>(false);
 
   const fetchFilteredData = async () => {
     if (!scrip) {
@@ -122,6 +130,39 @@ function App() {
     fetchFilteredData();
   };
 
+  const fetchWeekHigh = async () => {
+    if (!scrip) {
+      setError("Please enter a symbol.");
+      return;
+    }
+    // Clear previous state before new fetch
+    setWeek52High(null);
+    setWeek52HighDate(null);
+    setWeek52HighMessage(null);
+    setWeek52HighLoading(true);
+    setError(null);
+    try {
+      const data: Week52HighResponse = await fetchWeek52High(scrip);
+      console.log("[App] 52W high response:", data);
+      setWeek52High(data.week52_high);
+      setWeek52HighDate(data.cutoff_date ?? null);
+      if (data.message) {
+        setWeek52HighMessage(data.message);
+      } else if (data.week52_high == null) {
+        setWeek52HighMessage("No price data found for the past 52 weeks.");
+      } else {
+        setWeek52HighMessage(null);
+      }
+    } catch (err: any) {
+      setError(err.message || "Failed to fetch 52-week high");
+      setWeek52High(null);
+      setWeek52HighDate(null);
+      setWeek52HighMessage(null);
+    } finally {
+      setWeek52HighLoading(false);
+    }
+  };
+
   return (
     <div className="App">
       <h1>Trading Pattern Analyzer</h1>
@@ -194,9 +235,34 @@ function App() {
         >
           {loading ? "Loading..." : "Raw 10Y Price"}
         </button>
+
+        <button
+          type="button"
+          onClick={fetchWeekHigh}
+          disabled={week52HighLoading || loading}
+          style={{ marginLeft: "8px" }}
+        >
+          {week52HighLoading ? "Loading..." : "52W High"}
+        </button>
       </form>
 
       {error && <p style={{ color: "red" }}>Error: {error}</p>}
+
+      {(week52High !== null || week52HighMessage) && (
+        <div className="week52-card">
+          <strong>52-Week High: </strong>
+          {week52High !== null ? (
+            <span>{week52High.toFixed(2)}</span>
+          ) : (
+            <span>{week52HighMessage || "Not available"}</span>
+          )}
+          {week52HighDate && (
+            <span style={{ marginLeft: 8, color: "#94a3b8" }}>
+              (Since {week52HighDate})
+            </span>
+          )}
+        </div>
+      )}
 
       <div className="chart-container-wrapper">
         <TradingViewChart
@@ -213,6 +279,7 @@ function App() {
           }
           parameterSeriesName={seriesName}
           parameterSeriesData={seriesData}
+          week52High={week52High}
         />
       </div>
     </div>

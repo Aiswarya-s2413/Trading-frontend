@@ -1,7 +1,7 @@
 import axios from "axios";
 
-// const API_BASE_URL = "http://localhost:8000/api";
-const API_BASE_URL = "https://trading.aiswaryasathyan.space/api";
+const API_BASE_URL = "http://localhost:8000/api";
+// const API_BASE_URL = "https://trading.aiswaryasathyan.space/api";
 
 export interface PriceData {
   time: number; // Unix timestamp
@@ -53,6 +53,14 @@ export interface RawPriceHistoryResponse {
   scrip?: string;
   price_data: PriceData[];
   records?: number;
+}
+
+// 52-week high response
+export interface Week52HighResponse {
+  scrip: string;
+  week52_high: number | null;
+  cutoff_date?: string;
+  message?: string;
 }
 
 // Function to fetch pattern scan data from your backend
@@ -198,6 +206,34 @@ export const fetchRawPriceHistory = async (
   }
 };
 
+// Fetch 52-week high for a symbol
+export const fetchWeek52High = async (
+  scrip: string
+): Promise<Week52HighResponse> => {
+  try {
+    const response = await axios.get<Week52HighResponse>(
+      `${API_BASE_URL}/week52-high/`,
+      {
+        params: { scrip },
+      }
+    );
+    return response.data;
+  } catch (error) {
+    if (axios.isAxiosError(error)) {
+      console.error(
+        "API Error (52w high):",
+        error.response?.data || error.message
+      );
+      throw new Error(
+        error.response?.data?.error ||
+          "An unknown API error occurred while fetching 52-week high"
+      );
+    }
+    console.error("Network or other error (52w high):", error);
+    throw new Error("Network or other error during 52-week high API call");
+  }
+};
+
 //  Symbols coming from /api/symbols/
 export interface SymbolItem {
   id: number;
@@ -207,11 +243,8 @@ export interface SymbolItem {
 
 // Search symbols with optional query string
 export const searchSymbols = async (query: string): Promise<SymbolItem[]> => {
-  const response = await axios.get<SymbolItem[]>(
-    `${API_BASE_URL}/symbols/`,
-    {
-      params: query ? { q: query } : {},
-    }
-  );
+  const response = await axios.get<SymbolItem[]>(`${API_BASE_URL}/symbols/`, {
+    params: query ? { q: query } : {},
+  });
   return response.data;
 };
